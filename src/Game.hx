@@ -3,6 +3,7 @@ package;
 import kha.Color;
 import kha.Framebuffer;
 import kha.Shaders;
+import kha.graphics4.ConstantLocation;
 import kha.graphics4.FragmentShader;
 import kha.graphics4.IndexBuffer;
 import kha.graphics4.PipelineState;
@@ -11,6 +12,9 @@ import kha.graphics4.VertexBuffer;
 import kha.graphics4.VertexData;
 import kha.graphics4.VertexShader;
 import kha.graphics4.VertexStructure;
+import kha.math.FastMatrix3;
+import kha.math.FastMatrix4;
+import kha.math.FastVector3;
 
 class Game {
     // An array of 3 vectors representing 3 vertices to form a triangle
@@ -31,6 +35,9 @@ class Game {
     var indexBuffer:IndexBuffer;
     var pipeline:PipelineState;
 
+    var mvpId:ConstantLocation;
+    var mvp:FastMatrix4;
+
 	public function new () {
         // Define vertex structure
         final structure = new VertexStructure();
@@ -48,6 +55,29 @@ class Game {
         pipeline.fragmentShader = Shaders.threed_test_frag;
         pipeline.vertexShader = Shaders.threed_test_vert;
         pipeline.compile();
+
+        // Get a handle for our "MVP" uniform
+        mvpId = pipeline.getConstantLocation("MVP");
+
+        // Projection matrix: 45° Field of View, 4:3 ratio, 0.1-100 display range
+        // final projection = FastMatrix4.perspectiveProjection(45.0, 4.0 / 3.0, 0.1, 100.0);
+		// Or, for an ortho camera
+		final projection = FastMatrix4.orthogonalProjection(-10.0, 10.0, -10.0, 10.0, 0.0, 100.0); // In world coordinates
+
+        // Camera matrix
+        final view = FastMatrix4.lookAt(
+            new FastVector3(4, 3, 3), // Position in World Space
+            new FastVector3(0, 0, 0), // and looks at the origin
+            new FastVector3(0, 1, 0) // Head is up
+        );
+
+        // Model matrix: an identity matrix (model will be at the origin)
+        final model = FastMatrix4.identity();
+
+        mvp = FastMatrix4.identity();
+        mvp = mvp.multmat(projection);
+        mvp = mvp.multmat(view);
+        mvp = mvp.multmat(model);
         
         // Create vertex buffer
         vertexBuffer = new VertexBuffer(
@@ -93,6 +123,9 @@ class Game {
         // Bind data we want to draw
         g4.setVertexBuffer(vertexBuffer);
         g4.setIndexBuffer(indexBuffer);
+
+        // Send our transformation to the currently bound shader, in the "MVP" uniform
+        g4.setMatrix(mvpId, mvp);
 
         // Draw!
         g4.drawIndexedVertices();
