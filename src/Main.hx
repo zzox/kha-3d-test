@@ -1,5 +1,6 @@
 package;
 
+import kha.Scheduler;
 import kha.System;
 
 class Main {
@@ -8,6 +9,7 @@ class Main {
 	}
 
 	static function init(_) {
-		new Game();
+		final game = new Game();
+        Scheduler.addTimeTask(game.update, 0, 1 / 60);
 	}
 }

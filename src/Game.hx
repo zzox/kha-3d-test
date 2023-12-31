@@ -4,10 +4,12 @@ import kha.Assets;
 import kha.Color;
 import kha.Framebuffer;
 import kha.Image;
+import kha.Scheduler;
 import kha.Shaders;
 import kha.System;
 import kha.graphics4.CompareMode;
 import kha.graphics4.ConstantLocation;
+import kha.graphics4.CullMode;
 import kha.graphics4.FragmentShader;
 import kha.graphics4.IndexBuffer;
 import kha.graphics4.PipelineState;
@@ -17,6 +19,9 @@ import kha.graphics4.VertexBuffer;
 import kha.graphics4.VertexData;
 import kha.graphics4.VertexShader;
 import kha.graphics4.VertexStructure;
+import kha.input.KeyCode;
+import kha.input.Keyboard;
+import kha.input.Mouse;
 import kha.math.FastMatrix3;
 import kha.math.FastMatrix4;
 import kha.math.FastVector3;
@@ -70,6 +75,26 @@ class Game {
         0.667969, 0.671889,   1.000004, 0.671847,   0.667979, 0.335851
     ];
 
+    var lastTime:Float;
+    var isMouseDown:Bool;
+
+    var position:FastVector3 = new FastVector3(0, 0, 5); // Initial position: on +Z
+    var horizontalAngle:Float = 3.14; // Initial horizontal angle: toward -Z
+    var verticalAngle:Float = 0.0; // Initial vertical angle: none
+
+    var mouseDeltaX:Float = 0.0;
+    var mouseDeltaY:Float = 0.0;
+    var mouseX:Float = 0.0;
+    var mouseY:Float = 0.0;
+
+    var speed:Float = 3.0; // 3 units / second
+	var mouseSpeed:Float = 0.005;
+
+    var moveForward:Bool;
+    var moveBackward:Bool;
+    var strafeLeft:Bool;
+    var strafeRight:Bool;
+
     var vertexBuffer:VertexBuffer;
     var indexBuffer:IndexBuffer;
     var pipeline:PipelineState;
@@ -79,8 +104,32 @@ class Game {
     var textureId:TextureUnit;
     var image:Image;
 
+    var model:FastMatrix4;
+    var view:FastMatrix4;
+    var projection:FastMatrix4;
+
 	public function new () {
         Assets.loadEverything(create);
+
+        // Projection matrix: 45° Field of View, 4:3 ratio, 0.1-100 display range
+        projection = FastMatrix4.perspectiveProjection(45.0, 4.0 / 3.0, 0.1, 100.0);
+        // Or, for an ortho camera
+        // final projection = FastMatrix4.orthogonalProjection(-10.0, 10.0, -10.0, 10.0, 0.0, 100.0); // In world coordinates
+
+        // Camera matrix
+        view = FastMatrix4.lookAt(
+            new FastVector3(4, 3, 3), // Position in World Space
+            new FastVector3(0, 0, 0), // and looks at the origin
+            new FastVector3(0, 1, 0) // Head is up
+        );
+
+        // Model matrix: an identity matrix (model will be at the origin)
+        model = FastMatrix4.identity();
+
+        mvp = FastMatrix4.identity();
+        mvp = mvp.multmat(projection);
+        mvp = mvp.multmat(view);
+        mvp = mvp.multmat(model);
     }
 
     function create () {
@@ -107,6 +156,9 @@ class Game {
         pipeline.depthWrite = true;
         pipeline.depthMode = CompareMode.Less;
 
+        // Set culling
+        pipeline.cullMode = CullMode.Clockwise;
+
         // Get a handle for our "MVP" uniform
         // MVP is movel view projection
         mvpId = pipeline.getConstantLocation('MVP');
@@ -115,26 +167,6 @@ class Game {
         textureId = pipeline.getTextureUnit('myTextureSampler');
 
         image = Assets.images.uvtemplate;
-
-        // Projection matrix: 45° Field of View, 4:3 ratio, 0.1-100 display range
-        final projection = FastMatrix4.perspectiveProjection(45.0, 4.0 / 3.0, 0.1, 100.0);
-		// Or, for an ortho camera
-		// final projection = FastMatrix4.orthogonalProjection(-10.0, 10.0, -10.0, 10.0, 0.0, 100.0); // In world coordinates
-
-        // Camera matrix
-        final view = FastMatrix4.lookAt(
-            new FastVector3(4, 3, 3), // Position in World Space
-            new FastVector3(0, 0, 0), // and looks at the origin
-            new FastVector3(0, 1, 0) // Head is up
-        );
-
-        // Model matrix: an identity matrix (model will be at the origin)
-        final model = FastMatrix4.identity();
-
-        mvp = FastMatrix4.identity();
-        mvp = mvp.multmat(projection);
-        mvp = mvp.multmat(view);
-        mvp = mvp.multmat(model);
         
         // Create vertex buffer
         vertexBuffer = new VertexBuffer(
@@ -176,7 +208,80 @@ class Game {
         }
         indexBuffer.unlock();
 
+        // Add mouse and keyboard listeners
+        Mouse.get().notify(onMouseDown, onMouseUp, onMouseMove, null);
+        Keyboard.get().notify(onKeyDown, onKeyUp);
+
+        // Used to calculate delta time
+        lastTime = Scheduler.time();
+
         System.notifyOnFrames(render);
+    }
+
+    public function update () {
+        // Compute time difference between current and last frame
+        var deltaTime = Scheduler.time() - lastTime;
+        lastTime = Scheduler.time();
+
+        // Compute new orientation
+        if (isMouseDown) {
+            horizontalAngle += mouseSpeed * mouseDeltaX * -1;
+            verticalAngle += mouseSpeed * mouseDeltaY * -1;
+        }
+
+        // Direction: Spherical coordinates to Cartesian coordinates conversion
+        var direction = new FastVector3(
+            Math.cos(verticalAngle) * Math.sin(horizontalAngle),
+            Math.sin(verticalAngle),
+            Math.cos(verticalAngle) * Math.cos(horizontalAngle)
+        );
+
+        // Right vector
+        var right = new FastVector3(
+            Math.sin(horizontalAngle - 3.14 / 2.0),
+            0,
+            Math.cos(horizontalAngle - 3.14 / 2.0)
+        );
+
+        // Up vector
+        var up = right.cross(direction);
+
+        // Movement
+        if (moveForward) {
+            var v = direction.mult(deltaTime * speed);
+            position = position.add(v);
+        }
+        if (moveBackward) {
+            var v = direction.mult(deltaTime * speed * -1);
+            position = position.add(v);
+        }
+        if (strafeRight) {
+            var v = right.mult(deltaTime * speed);
+            position = position.add(v);
+        }
+        if (strafeLeft) {
+            var v = right.mult(deltaTime * speed * -1);
+            position = position.add(v);
+        }
+
+        // Look vector
+        var look = position.add(direction);
+
+        // Camera matrix
+        view = FastMatrix4.lookAt(
+            position, // Camera is here
+            look, // and looks here : at the same position, plus "direction"
+            up // Head is up (set to (0, -1, 0) to look upside-down)
+        );
+
+        // Update model-view-projection matrix
+        mvp = FastMatrix4.identity();
+        mvp = mvp.multmat(projection);
+        mvp = mvp.multmat(view);
+        mvp = mvp.multmat(model);
+
+        mouseDeltaX = 0;
+        mouseDeltaY = 0;
     }
 
     public function render(frames:Array<Framebuffer>) {
@@ -205,5 +310,35 @@ class Game {
 
         // End rendering
 		g4.end();
+    }
+
+    function onMouseDown(button:Int, x:Int, y:Int) {
+        isMouseDown = true;
+    }
+
+    function onMouseUp(button:Int, x:Int, y:Int) {
+        isMouseDown = false;
+    }
+
+    function onMouseMove(x:Int, y:Int, movementX:Int, movementY:Int) {
+        mouseDeltaX = x - mouseX;
+        mouseDeltaY = y - mouseY;
+
+        mouseX = x;
+        mouseY = y;
+    }
+
+    function onKeyDown(key:KeyCode) {
+        if (key == KeyCode.Up) moveForward = true;
+        else if (key == KeyCode.Down) moveBackward = true;
+        else if (key == KeyCode.Left) strafeLeft = true;
+        else if (key == KeyCode.Right) strafeRight = true;
+    }
+
+    function onKeyUp(key:KeyCode) {
+        if (key == KeyCode.Up) moveForward = false;
+        else if (key == KeyCode.Down) moveBackward = false;
+        else if (key == KeyCode.Left) strafeLeft = false;
+        else if (key == KeyCode.Right) strafeRight = false;
     }
 }
