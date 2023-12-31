@@ -94,6 +94,8 @@ class Game {
     var moveBackward:Bool;
     var strafeLeft:Bool;
     var strafeRight:Bool;
+    var rotateLeft:Bool;
+    var rotateRight:Bool;
 
     var vertexBuffer:VertexBuffer;
     var indexBuffer:IndexBuffer;
@@ -263,6 +265,12 @@ class Game {
             var v = right.mult(deltaTime * speed * -1);
             position = position.add(v);
         }
+        if (rotateLeft) {
+            model = model.multmat(FastMatrix4.rotationY(-0.01));
+        }
+        if (rotateRight) {
+            model = model.multmat(FastMatrix4.rotationY(0.01));
+        }
 
         // Look vector
         var look = position.add(direction);
@@ -333,6 +341,8 @@ class Game {
         else if (key == KeyCode.Down) moveBackward = true;
         else if (key == KeyCode.Left) strafeLeft = true;
         else if (key == KeyCode.Right) strafeRight = true;
+        else if (key == KeyCode.Q) rotateLeft = true;
+        else if (key == KeyCode.E) rotateRight = true;
     }
 
     function onKeyUp(key:KeyCode) {
@@ -340,5 +350,7 @@ class Game {
         else if (key == KeyCode.Down) moveBackward = false;
         else if (key == KeyCode.Left) strafeLeft = false;
         else if (key == KeyCode.Right) strafeRight = false;
+        else if (key == KeyCode.Q) rotateLeft = false;
+        else if (key == KeyCode.E) rotateRight = false;
     }
 }
