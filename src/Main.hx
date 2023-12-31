@@ -8,7 +8,6 @@ class Main {
 	}
 
 	static function init(_) {
-		final game = new Game();
-		System.notifyOnFrames(game.render);
+		new Game();
 	}
 }

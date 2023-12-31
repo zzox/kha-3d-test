@@ -1,13 +1,17 @@
 package;
 
+import kha.Assets;
 import kha.Color;
 import kha.Framebuffer;
+import kha.Image;
 import kha.Shaders;
+import kha.System;
 import kha.graphics4.CompareMode;
 import kha.graphics4.ConstantLocation;
 import kha.graphics4.FragmentShader;
 import kha.graphics4.IndexBuffer;
 import kha.graphics4.PipelineState;
+import kha.graphics4.TextureUnit;
 import kha.graphics4.Usage;
 import kha.graphics4.VertexBuffer;
 import kha.graphics4.VertexData;
@@ -19,23 +23,23 @@ import kha.math.FastVector3;
 
 class Game {
     // An array of vertices to form a cube
-    static var vertices:Array<Float> = [
+    static final vertices:Array<Float> = [
         -1.0,-1.0,-1.0,  -1.0,-1.0, 1.0,  -1.0, 1.0, 1.0,
         1.0, 1.0,-1.0,  -1.0,-1.0,-1.0,  -1.0, 1.0,-1.0,
+        1.0,-1.0, 1.0,  -1.0,-1.0,-1.0,   1.0,-1.0,-1.0,
+        1.0, 1.0,-1.0,   1.0,-1.0,-1.0,  -1.0,-1.0,-1.0,
+       -1.0,-1.0,-1.0,  -1.0, 1.0, 1.0,  -1.0, 1.0,-1.0,
         1.0,-1.0, 1.0,  -1.0,-1.0, 1.0,  -1.0,-1.0,-1.0,
-        -1.0, 1.0, 1.0,  -1.0,-1.0, 1.0,   1.0,-1.0, 1.0,
+       -1.0, 1.0, 1.0,  -1.0,-1.0, 1.0,   1.0,-1.0, 1.0,
         1.0, 1.0, 1.0,   1.0,-1.0,-1.0,   1.0, 1.0,-1.0,
         1.0,-1.0,-1.0,   1.0, 1.0, 1.0,   1.0,-1.0, 1.0,
         1.0, 1.0, 1.0,   1.0, 1.0,-1.0,  -1.0, 1.0,-1.0,
-        1.0,-1.0, 1.0,  -1.0,-1.0,-1.0,   1.0,-1.0,-1.0,
-        1.0, 1.0,-1.0,   1.0,-1.0,-1.0,  -1.0,-1.0,-1.0,
-        -1.0,-1.0,-1.0,  -1.0, 1.0, 1.0,  -1.0, 1.0,-1.0,
         1.0, 1.0, 1.0,  -1.0, 1.0,-1.0,  -1.0, 1.0, 1.0,
         1.0, 1.0, 1.0,  -1.0, 1.0, 1.0,   1.0,-1.0, 1.0
     ];
 
     // Array of colors for each cube vertex
-    static var colors:Array<Float> = [
+    static final colors:Array<Float> = [
         0.583, 0.771, 0.014,   0.609, 0.115, 0.436,   0.327, 0.483, 0.844,
         0.822, 0.569, 0.201,   0.435, 0.602, 0.223,   0.310, 0.747, 0.185,
         0.597, 0.770, 0.761,   0.559, 0.436, 0.730,   0.359, 0.583, 0.152,
@@ -50,22 +54,45 @@ class Game {
         0.673, 0.211, 0.457,   0.820, 0.883, 0.371,   0.982, 0.099, 0.879
     ];
 
+    // Array of texture coords for each cube vertex
+    static final uvs:Array<Float> = [
+        0.000059, 0.000004,   0.000103, 0.336048,   0.335973, 0.335903,
+        1.000023, 0.000013,   0.667979, 0.335851,   0.999958, 0.336064,
+        0.667979, 0.335851,   0.336024, 0.671877,   0.667969, 0.671889,
+        1.000023, 0.000013,   0.668104, 0.000013,   0.667979, 0.335851,
+        0.000059, 0.000004,   0.335973, 0.335903,   0.336098, 0.000071,
+        0.667979, 0.335851,   0.335973, 0.335903,   0.336024, 0.671877,
+        1.000004, 0.671847,   0.999958, 0.336064,   0.667979, 0.335851,
+        0.668104, 0.000013,   0.335973, 0.335903,   0.667979, 0.335851,
+        0.335973, 0.335903,   0.668104, 0.000013,   0.336098, 0.000071,
+        0.000103, 0.336048,   0.000004, 0.671870,   0.336024, 0.671877,
+        0.000103, 0.336048,   0.336024, 0.671877,   0.335973, 0.335903,
+        0.667969, 0.671889,   1.000004, 0.671847,   0.667979, 0.335851
+    ];
+
     var vertexBuffer:VertexBuffer;
     var indexBuffer:IndexBuffer;
     var pipeline:PipelineState;
 
     var mvpId:ConstantLocation;
     var mvp:FastMatrix4;
+    var textureId:TextureUnit;
+    var image:Image;
 
 	public function new () {
+        Assets.loadEverything(create);
+    }
+
+    function create () {
         // Define vertex structure
         final structure = new VertexStructure();
         structure.add('pos', VertexData.Float3);
         structure.add('col', VertexData.Float3);
+        structure.add('uv', VertexData.Float2);
 
         // Save length - we only store position in vertices for now
         // Eventually there will be texture coords, normals,...
-        final structureLength = 6;
+        final structureLength = 8;
 
         // Compile pipeline state
         // Shaders are located in 'Sources/Shaders' directory
@@ -82,7 +109,12 @@ class Game {
 
         // Get a handle for our "MVP" uniform
         // MVP is movel view projection
-        mvpId = pipeline.getConstantLocation("MVP");
+        mvpId = pipeline.getConstantLocation('MVP');
+
+        // Get a handle for texture sample
+        textureId = pipeline.getTextureUnit('myTextureSampler');
+
+        image = Assets.images.uvtemplate;
 
         // Projection matrix: 45° Field of View, 4:3 ratio, 0.1-100 display range
         final projection = FastMatrix4.perspectiveProjection(45.0, 4.0 / 3.0, 0.1, 100.0);
@@ -120,6 +152,8 @@ class Game {
             vbData.set(i * structureLength + 3, colors[i * 3]);
             vbData.set(i * structureLength + 4, colors[i * 3 + 1]);
             vbData.set(i * structureLength + 5, colors[i * 3 + 2]);
+            vbData.set(i * structureLength + 6, uvs[i * 2]);
+            vbData.set(i * structureLength + 7, uvs[i * 2 + 1]);
         }
         vertexBuffer.unlock();
 
@@ -141,6 +175,8 @@ class Game {
             iData[i] = indices[i];
         }
         indexBuffer.unlock();
+
+        System.notifyOnFrames(render);
     }
 
     public function render(frames:Array<Framebuffer>) {
@@ -160,6 +196,7 @@ class Game {
         g4.setVertexBuffer(vertexBuffer);
         g4.setIndexBuffer(indexBuffer);
 
+        g4.setTexture(textureId, image);
         // Send our transformation to the currently bound shader, in the "MVP" uniform
         g4.setMatrix(mvpId, mvp);
 
