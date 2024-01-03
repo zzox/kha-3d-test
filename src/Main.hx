@@ -7,6 +7,7 @@ class Main {
 	}
 
 	static function init(_) {
+		// final game = new OldGame();
 		final game = new Game();
         Scheduler.addTimeTask(game.update, 0, 1 / 60);
 	}
