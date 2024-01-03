@@ -51,6 +51,9 @@ class Game {
     var mvp:FastMatrix4;
     var textureId:TextureUnit;
     var image:Image;
+    var viewMatrixID:ConstantLocation;
+    var modelMatrixID:ConstantLocation;
+    var lightID:ConstantLocation;
 
     var model:FastMatrix4;
     var view:FastMatrix4;
@@ -84,13 +87,12 @@ class Game {
         // Define vertex structure
         final structure = new VertexStructure();
         structure.add('pos', VertexData.Float3);
-        // structure.add('col', VertexData.Float3);
         structure.add('uv', VertexData.Float2);
+        structure.add('nor', VertexData.Float3);
 
         // Save length - we only store position in vertices for now
         // Eventually there will be texture coords, normals,...
-        // final structureLength = 8;
-        final structureLength = 5;
+        final structureLength = 8;
 
         // Compile pipeline state
         // Shaders are located in 'Sources/Shaders' directory
@@ -114,6 +116,9 @@ class Game {
 
         // Get a handle for texture sample
         textureId = pipeline.getTextureUnit('myTextureSampler');
+        viewMatrixID = pipeline.getConstantLocation("V");
+        modelMatrixID = pipeline.getConstantLocation("M");
+        lightID = pipeline.getConstantLocation("lightPos");
 
         image = Assets.images.uvmap;
 
@@ -239,7 +244,7 @@ class Game {
         g4.setPipeline(pipeline);
 
         // Clear screen to black, also reset depth
-        g4.clear(Color.fromFloats(0.0, 0.0, 0.3), 1.0);
+        g4.clear(Color.fromFloats(0.0, 0.0, 0.0), 1.0);
 
         // Bind data we want to draw
         g4.setVertexBuffer(vertexBuffer);
@@ -248,6 +253,12 @@ class Game {
         g4.setTexture(textureId, image);
         // Send our transformation to the currently bound shader, in the "MVP" uniform
         g4.setMatrix(mvpId, mvp);
+
+        g4.setMatrix(modelMatrixID, model);
+        g4.setMatrix(viewMatrixID, view);
+    
+        // Set light position to (4, 4, 4)
+        g4.setFloat3(lightID, 4, 4, 4);
 
         // Draw!
         g4.drawIndexedVertices();
