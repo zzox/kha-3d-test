@@ -1,5 +1,3 @@
-package;
-
 import kha.Assets;
 import kha.Color;
 import kha.Framebuffer;
