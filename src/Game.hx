@@ -117,7 +117,7 @@ class Game {
 
         image = Assets.images.uvmap;
 
-        final obj = new ObjLoader(Assets.blobs.cube_obj);
+        final obj = new ObjLoader(Assets.blobs.suzanne_obj);
 
         // Create vertex buffer
         vertexBuffer = new VertexBuffer(
